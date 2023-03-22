@@ -8,11 +8,11 @@ num_years = input("Enter number of years: ")
 
 # Connect to the database
 conn = psycopg2.connect(
-    database="iii",
-    user="npflager",
-    password="wrls17",
-    host="192.168.100.22",
-    port="1032"
+    database="***",
+    user="********",
+    password="******",
+    host="**************",
+    port="****"
 )
 
 # create a cursor object
