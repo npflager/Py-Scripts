@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore")
 variables = ['al', 'ar', 'bf', 'bp', 'ca', 'cv', 'el', 'et', 'fa', 'ga', 'hi', 'in', 'ke', 'lb', 'lc', 'lo', 'lw', 'ma', 'mo', 'ne', 'nl', 'no', 'p', 'on', 'st', 'ta', 'tr', 'vi', 'we', 'wh', 'wl', 'wo']
 
 # Set up a connection to your PostgreSQL database
-conn = psycopg2.connect(database="iii", user="npflager", password="wrls17", host="192.168.100.22", port="1032")
+conn = psycopg2.connect(database="iii", user="********", password="****", host="192.168.100.22", port="****")
 
 # Specify path
 orig_folder_path = "C:/Users/Nate/OneDrive - Winding River Library System/PYTHON/AUTOWEED" 
