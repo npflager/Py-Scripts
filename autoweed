@@ -1,0 +1,101 @@
+import os
+import pandas as pd
+import psycopg2
+import warnings
+
+warnings.filterwarnings("ignore")
+
+# Set up a list values for the variable
+#variables = ['wn'] -- test
+
+variables = ['al', 'ar', 'bf', 'bp', 'ca', 'cv', 'el', 'et', 'fa', 'ga', 'hi', 'in', 'ke', 'lb', 'lc', 'lo', 'lw', 'ma', 'mo', 'ne', 'nl', 'no', 'p', 'on', 'st', 'ta', 'tr', 'vi', 'we', 'wh', 'wl', 'wo']
+
+# Set up a connection to your PostgreSQL database
+conn = psycopg2.connect(database="iii", user="npflager", password="wrls17", host="192.168.100.22", port="1032")
+
+# Specify path
+orig_folder_path = "C:/Users/Nate/OneDrive - Winding River Library System/PYTHON/AUTOWEED" 
+
+# Loop through the variables and run the SQL query for each one
+for variable in variables:
+    # Replace with the current variable value
+    sql_query = """
+        SELECT
+            REPLACE(ir.call_number, '|a', ''),
+            iv.location_code,
+            br.best_title,
+            br.best_author,
+            iv.record_type_code||record_num||'a' AS item_number,
+            iv.barcode,
+            iv.last_checkout_gmt,
+            iv.item_status_code
+        FROM
+            sierra_view.item_view iv
+        JOIN
+            sierra_view.bib_record_item_record_link lk
+        ON 
+            iv.id = lk.item_record_id
+        JOIN
+            sierra_view.bib_record_property br
+        ON
+            lk.bib_record_id = br.bib_record_id
+        JOIN
+            sierra_view.item_record_property ir
+        ON 
+            iv.id = ir.item_record_id
+        WHERE
+            (iv.last_checkout_gmt < (localtimestamp - interval '5 years') OR iv.last_checkout_gmt = NULL)
+            AND
+            iv.record_creation_date_gmt < (localtimestamp - interval '5 years') 
+            AND 
+            iv.location_code LIKE '%s%%'
+            AND
+            iv.item_status_code = '-'
+        ORDER BY 2,1
+        """ % variable
+    
+    # Execute the SQL query and store the results in a pandas dataframe
+    df = pd.read_sql_query(sql_query, conn)
+    
+    # Convert last_checkout_gmt column to a timezone-naive datetime object
+    df['last_checkout_gmt'] = pd.to_datetime(df['last_checkout_gmt'], utc=True).dt.tz_convert(None)
+    
+    # Create a new directory with the same name as the current variable value
+    directory_name = os.path.join(orig_folder_path, variable) # include the originating folder path in the path
+    os.makedirs(directory_name, exist_ok=True)
+    
+    # Export the dataframe to an xlsx file in the new directory
+    file_name = f'{variable}_no_circ_5year.xlsx'
+    file_path = os.path.join(directory_name, file_name)
+    writer = pd.ExcelWriter(file_path, engine='xlsxwriter', options={'strings_to_numbers': True})
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    
+    # Convert last_checkout_gmt column to a timezone-naive datetime object and remove time component
+    df['last_checkout_gmt'] = pd.to_datetime(df['last_checkout_gmt'], utc=True).dt.tz_convert(None).dt.date
+
+    # Format last_checkout_gmt column as YYYY-MM-DD
+    df['last_checkout_gmt'] = pd.to_datetime(df['last_checkout_gmt']).dt.strftime('%Y-%m-%d')
+
+    # Define the worksheet variable
+    workbook = writer.book
+    worksheet = writer.sheets['Sheet1']
+
+    # Set the column widths in the Excel file and set the barcode column format to '0'
+    worksheet.set_column('A:A', 30)  # Call number
+    worksheet.set_column('B:B', 10)  # Location code
+    worksheet.set_column('C:C', 60)  # Title
+    worksheet.set_column('D:D', 30)  # Author
+    worksheet.set_column('E:E', 15)  # Item number
+    worksheet.set_column('F:F', 20, cell_format=workbook.add_format({'num_format': '0'}))  # Barcode
+    worksheet.set_column('G:G', 20, cell_format=workbook.add_format({'num_format': 'yyyy-mm-dd'}))  # Last checkout date
+    worksheet.set_column('H:H', 10)  # Item status
+    
+    # Save the xlsx file and close the writer
+    writer.save()
+    writer.close()
+    
+    print(f'Folder and file created for {variable}!')
+    
+# Close the database connection
+conn.close()
+print(f'Done! Please see the {orig_folder_path} directory.')
