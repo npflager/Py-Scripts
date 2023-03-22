@@ -1,0 +1,56 @@
+import psycopg2
+import getpass
+from openpyxl import Workbook
+
+# get user input for location code and number of years
+location_code = input("Enter location code: ")
+num_years = input("Enter number of years: ")
+
+# Connect to the database
+conn = psycopg2.connect(
+    database="iii",
+    user="npflager",
+    password="wrls17",
+    host="192.168.100.22",
+    port="1032"
+)
+
+# create a cursor object
+cur = conn.cursor()
+
+# execute the SQL query with the user input variables
+cur.execute("""SELECT REPLACE(ir.call_number, '|a', ''), iv.location_code, br.best_title, br.best_author, iv.record_type_code||record_num||'a' AS item_number, iv.barcode, iv.last_checkout_gmt, iv.item_status_code
+               FROM sierra_view.item_view iv
+               JOIN sierra_view.bib_record_item_record_link lk ON iv.id = lk.item_record_id
+               JOIN sierra_view.bib_record_property br ON lk.bib_record_id = br.bib_record_id
+               JOIN sierra_view.item_record_property ir ON iv.id = ir.item_record_id
+               WHERE (iv.last_checkout_gmt < (localtimestamp - interval '{} years') OR iv.last_checkout_gmt IS NULL)
+               AND iv.record_creation_date_gmt < (localtimestamp - interval '{} years')
+               AND iv.location_code LIKE '{}%'
+               AND iv.item_status_code = '-'
+               ORDER BY 2,1""".format(num_years, num_years, location_code))
+
+# create a new Excel workbook and worksheet
+wb = Workbook()
+ws = wb.active
+
+# write the column headers to the worksheet
+ws.append(['Call Number', 'Location Code', 'Title', 'Author', 'Item Number', 'Barcode', 'Last Checkout', 'Item Status'])
+
+# fetch all rows and write them to the worksheet
+rows = cur.fetchall()
+for row in rows:
+    # convert the datetime object to a string before writing it to the worksheet
+    row = list(row)
+    if row[6] is not None:
+        row[6] = str(row[6])
+    ws.append(row)
+
+# close the cursor and connection
+cur.close()
+conn.close()
+
+# save the workbook to a file
+filename = "weeding_{}_{}years.xlsx".format(location_code, num_years)
+wb.save(filename)
+print(f'Results saved to {filename}')
