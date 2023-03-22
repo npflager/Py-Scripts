@@ -1,0 +1,136 @@
+import os
+import datetime
+import psycopg2
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.platypus import Table, TableStyle
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+import pandas as pd
+from datetime import date
+
+# Database credentials
+database = "iii"
+user = "npflager"
+password = "wrls17"
+host = "192.168.100.22"
+port = "1032"
+
+# Connect to the database
+conn = psycopg2.connect(database=database, user=user, password=password, host=host, port=port)
+cursor = conn.cursor()
+
+# Read the SQL query from a file
+with open('C:/Users/Nate/OneDrive - Winding River Library System/PYTHON/ILLBILLS/ILL_BILLS.sql', 'r') as f:
+    query = f.read()
+
+# Execute the SQL query
+cursor.execute(query)
+rows = cursor.fetchall()
+
+# Generate bills in PDF format
+today = datetime.datetime.today().strftime('%Y-%m-%d')
+folder_path = f"C:/Users/Nate/OneDrive - Winding River Library System/PYTHON/ILLBILLS/{today}"
+print(folder_path)
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
+
+# Read in the Excel file containing sender information
+df = pd.read_excel('sender_info.xlsx')
+
+# Get the first row of the dataframe
+sender_info = df.iloc[0]
+
+# Use the sender information to populate fields in your PDF bill generation script
+sender_name = sender_info['Name']
+sender_address = sender_info['Address']
+sender_city = sender_info['City_state_zip']
+sender_phone = sender_info['Phone']
+sender_email = sender_info['Email']
+
+# Replace the following code with your bill generation logic
+for idx, row in enumerate(rows):
+    pdf_name = f"{folder_path}/{row[1][:12].replace(' ', '')}.pdf"
+    print(pdf_name,'created!')
+    c = canvas.Canvas(pdf_name, pagesize=letter)
+    
+    # Extract the first two digits of owning_location
+    location_prefix = row[5][:2]
+    
+    # Filter the sender_info dataframe based on the Library column matching the location prefix
+    sender_info_filtered = df[df['Library'] == location_prefix]
+    
+    # Use the first row of the filtered dataframe to populate fields in the PDF bill generation script
+    sender_info = sender_info_filtered.iloc[0]
+    
+    sender_name = sender_info['Name']
+    sender_address = sender_info['Address']
+    sender_city = sender_info['City_state_zip']
+    sender_phone = sender_info['Phone']
+    sender_email = sender_info['Email']
+    
+    # Create header
+    header_text = f"This Is a Replacement Bill - {today}" 
+    #logo_path = "C:/Users/Nate/OneDrive - Winding River Library System/PYTHON/ILLBILLS/logo.png"
+    
+    # Add header
+    #c.drawImage(logo_path, inch, 9.5*inch, width=2*inch, height=1.5*inch, mask="auto")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(4.25*inch, 9.25*inch, header_text)
+    
+    # Add sender information
+    c.setFont("Helvetica", 12)
+    c.drawString(inch, 8.75*inch, 'Please remit payment to:')
+    c.drawString(inch, 8.25*inch, sender_name)
+    c.drawString(inch, 8*inch, sender_address)
+    c.drawString(inch, 7.75*inch, f"{sender_city}")
+    
+    # Add table
+    bill_data = [['Bill for:', row[1]], ['Address:', row[2]], ['City, State, ZIP:', row[4]]]
+    table = Table(bill_data, colWidths=[1.5*inch, 5*inch])
+    table.setStyle(TableStyle([
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#2C5F9B')),
+        ('TEXTCOLOR', (0, 1), (-1, 1), colors.black),
+        ('TEXTCOLOR', (0, 2), (-1, 2), colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 1), (-1, 2), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('FONTSIZE', (0, 1), (-1, 2), 12),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E6E6E6')),
+        ('BACKGROUND', (0, 2), (-1, 2), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.white)
+    ]))   
+    table.wrapOn(c, inch, inch)
+    table.drawOn(c, inch, 6.5*inch)
+    
+    # Add table
+    bill_data = [['Barcode:', row[9]], ['Title:', row[7]],['Assessed:', row[6]], ['Amount owed:', row[11]]]
+    table = Table(bill_data, colWidths=[1.5*inch, 5*inch])
+    table.setStyle(TableStyle([
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('TEXTCOLOR', (0, 1), (-1, 1), colors.black),
+        ('TEXTCOLOR', (0, 3), (-1, 3), colors.red),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+        ('FONTNAME', (0, 1), (-1, 2), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 1), (-1, 2), 12),
+        ('FONTSIZE', (0, 3), (-1, 3), 14),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('BACKGROUND', (0, 3), (-1, 3), colors.HexColor('#FFCDD2')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.white)
+    ]))
+    table.wrapOn(c, inch, inch)
+    table.drawOn(c, inch, 5*inch)
+    
+    # Add page number
+    page_num = c.getPageNumber()
+    c.setFont("Helvetica", 12)
+    c.drawString(4.25*inch, 0.75*inch, f"Page {page_num}")
+    c.showPage()
+    c.save()
