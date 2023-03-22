@@ -14,11 +14,11 @@ import pandas as pd
 from datetime import date
 
 # Database credentials
-database = "iii"
-user = "npflager"
-password = "wrls17"
-host = "192.168.100.22"
-port = "1032"
+database = "***"
+user = "********"
+password = "******"
+host = "************"
+port = "****"
 
 # Connect to the database
 conn = psycopg2.connect(database=database, user=user, password=password, host=host, port=port)
